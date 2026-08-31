@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>XAI Legal Predictor — AIML Project</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ HEADER ═══════════════════════════════════ -->
+<header class="site-header">
+  <div class="header-inner">
+    <div class="header-logo">
+      <span class="logo-glyph">⚖</span>
+      <div>
+        <div class="logo-title">XAI Legal Predictor</div>
+        <div class="logo-sub">Explainable AI · AIML Engineering Project · 3rd Year</div>
+      </div>
+    </div>
+    <nav class="header-nav">
+      <button class="nav-btn active" onclick="showSection('home')">Home</button>
+      <button class="nav-btn" onclick="showSection('predictor')">Predictor</button>
+      <button class="nav-btn" onclick="showSection('about')">About XAI</button>
+    </nav>
+  </div>
+</header>
+
+<!-- ════════════════════════════ HERO / HOME ════════════════════════════════ -->
+<section id="section-home" class="section active">
+  <div class="hero">
+    <div class="hero-badge">AIML 3rd Year · Mini Project</div>
+    <h1 class="hero-title">Explainable AI for<br/><span class="accent">Legal Case Prediction</span></h1>
+    <p class="hero-sub">
+      A machine-learning system that predicts court case outcomes and — critically —
+      <em>explains why</em> using LIME, SHAP, and feature-importance analysis.
+    </p>
+    <div class="hero-cta">
+      <button class="btn-primary" onclick="showSection('predictor')">Try the Predictor →</button>
+      <button class="btn-ghost" onclick="showSection('about')">Learn About XAI</button>
+    </div>
+    <div class="hero-stats">
+      <div class="stat-card">
+        <div class="stat-num" id="stat-acc">—</div>
+        <div class="stat-label">Model Accuracy</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">200</div>
+        <div class="stat-label">Decision Trees</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">10</div>
+        <div class="stat-label">Case Features</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">3</div>
+        <div class="stat-label">XAI Techniques</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sample Cases Grid -->
+  <div class="container">
+    <h2 class="section-heading">Sample Case Library</h2>
+    <div class="cases-grid" id="cases-grid">
+      {% for case in sample_cases %}
+      <div class="case-card diff-{{ case.difficulty | lower | replace(' ', '-') }}"
+           onclick="loadCase({{ case.id }})">
+        <div class="case-header">
+          <span class="case-badge badge-{{ case.difficulty | lower }}">{{ case.difficulty }}</span>
+          <span class="case-cat">{{ case.category }}</span>
+        </div>
+        <h3 class="case-title">{{ case.title }}</h3>
+        <p class="case-narrative">{{ case.narrative[:130] }}…</p>
+        <div class="case-footer">
+          <span class="case-expected">Expected: {{ case.expected_outcome }}</span>
+          <span class="case-cta">Analyze →</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════ PREDICTOR ══════════════════════════════════ -->
+<section id="section-predictor" class="section">
+  <div class="container predictor-layout">
+
+    <!-- LEFT: Input Panel -->
+    <div class="input-panel">
+      <div class="panel-header">
+        <h2>Case Input</h2>
+        <p>Fill in the case details or load a sample</p>
+      </div>
+
+      <!-- Case name -->
+      <div class="field-group">
+        <label class="field-label" for="case-name">Case Name / Title</label>
+        <input type="text" id="case-name" class="field-input" placeholder="e.g. State vs. John Doe" value="Custom Case"/>
+      </div>
+
+      <!-- Dynamic feature inputs -->
+      <div id="feature-inputs">
+        {% for key, fd in feature_descriptions.items() %}
+        <div class="field-group">
+          <label class="field-label" for="feat-{{ key }}">
+            {{ fd.label }}
+            <span class="tooltip" title="{{ fd.desc }}">ℹ</span>
+          </label>
+
+          {% if fd.type == 'range' %}
+          <div class="range-wrap">
+            <input type="range" id="feat-{{ key }}" class="field-range"
+                   min="{{ fd.min }}" max="{{ fd.max }}" step="{{ fd.step }}"
+                   value="{{ (fd.min + fd.max) / 2 }}"
+                   oninput="updateRangeDisplay('{{ key }}', this.value)"/>
+            <span class="range-val" id="val-{{ key }}">{{ ((fd.min + fd.max) / 2) }}</span>
+          </div>
+
+          {% elif fd.type == 'toggle' %}
+          <div class="toggle-wrap">
+            <label class="toggle">
+              <input type="checkbox" id="feat-{{ key }}" onchange="updateToggleDisplay('{{ key }}')"/>
+              <span class="toggle-track"></span>
+              <span class="toggle-label-off">No</span>
+              <span class="toggle-label-on">Yes</span>
+            </label>
+          </div>
+
+          {% elif fd.type == 'select' %}
+          <select id="feat-{{ key }}" class="field-select">
+            {% for i, opt in enumerate(fd.options) %}
+            <option value="{{ i }}">{{ opt }}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
+
+          <p class="field-desc">{{ fd.desc }}</p>
+        </div>
+        {% endfor %}
+      </div>
+
+      <button class="btn-primary btn-full" onclick="predict()">
+        <span id="predict-btn-text">⚡ Analyze Case</span>
+      </button>
+
+      <button class="btn-ghost btn-full mt-sm" onclick="resetForm()">Reset All Fields</button>
+    </div>
+
+    <!-- RIGHT: Results Panel -->
+    <div class="results-panel" id="results-panel">
+      <!-- Placeholder before first prediction -->
+      <div class="results-placeholder" id="results-placeholder">
+        <div class="placeholder-icon">⚖</div>
+        <h3>Results Appear Here</h3>
+        <p>Enter case details on the left and click <strong>Analyze Case</strong> to get a prediction with full XAI explanations.</p>
+        <p class="placeholder-hint">Or load one of the sample cases from the Home page.</p>
+      </div>
+
+      <!-- Actual results (hidden until predict) -->
+      <div class="results-content" id="results-content" style="display:none">
+
+        <!-- Verdict card -->
+        <div class="verdict-card" id="verdict-card">
+          <div class="verdict-label">Predicted Outcome</div>
+          <div class="verdict-value" id="verdict-value">—</div>
+          <div class="verdict-confidence" id="verdict-confidence">—</div>
+          <div class="verdict-bar-wrap">
+            <div class="verdict-bar-inner" id="verdict-bar-acquitted"></div>
+            <div class="verdict-bar-inner convicted" id="verdict-bar-convicted"></div>
+          </div>
+          <div class="verdict-bar-labels">
+            <span>Acquitted <span id="prob-acq">—</span></span>
+            <span>Convicted <span id="prob-con">—</span></span>
+          </div>
+        </div>
+
+        <!-- NL Explanation -->
+        <div class="explanation-box" id="nl-explanation"></div>
+
+        <!-- Tabs for XAI methods -->
+        <div class="xai-tabs">
+          <button class="tab-btn active" onclick="showTab('tab-lime')">🔍 LIME</button>
+          <button class="tab-btn" onclick="showTab('tab-shap')">📊 SHAP</button>
+          <button class="tab-btn" onclick="showTab('tab-global')">🌐 Global Importance</button>
+          <button class="tab-btn" onclick="showTab('tab-trees')">🌳 Tree Votes</button>
+        </div>
+
+        <!-- LIME Tab -->
+        <div class="tab-content active" id="tab-lime">
+          <h3 class="tab-heading">LIME — Local Explanation</h3>
+          <p class="tab-desc">
+            <strong>LIME (Local Interpretable Model-agnostic Explanations)</strong> creates a simpler
+            linear model around this specific prediction. Each bar shows how much a feature
+            <span class="plus-label">increased</span> or <span class="minus-label">decreased</span> the conviction probability.
+          </p>
+          <canvas id="lime-chart" height="260"></canvas>
+        </div>
+
+        <!-- SHAP Tab -->
+        <div class="tab-content" id="tab-shap">
+          <h3 class="tab-heading">SHAP — Feature Contribution</h3>
+          <p class="tab-desc">
+            <strong>SHAP (SHapley Additive exPlanations)</strong> measures each feature's
+            marginal contribution by comparing the prediction with and without that feature.
+            Positive values push towards conviction; negative values push towards acquittal.
+          </p>
+          <canvas id="shap-chart" height="260"></canvas>
+        </div>
+
+        <!-- Global Tab -->
+        <div class="tab-content" id="tab-global">
+          <h3 class="tab-heading">Global Feature Importance</h3>
+          <p class="tab-desc">
+            This shows which features are <em>generally</em> most important across all cases
+            in the training dataset — not just for this specific case. Based on mean
+            decrease in Gini impurity across all 200 decision trees.
+          </p>
+          <canvas id="global-chart" height="260"></canvas>
+        </div>
+
+        <!-- Tree votes Tab -->
+        <div class="tab-content" id="tab-trees">
+          <h3 class="tab-heading">Random Forest — Tree Voting</h3>
+          <p class="tab-desc">
+            Random Forest is an ensemble of 200 decision trees. Each tree "votes" independently.
+            The final prediction is a majority vote. This shows how the trees voted for this case.
+          </p>
+          <div class="vote-visual" id="vote-visual"></div>
+          <div class="vote-summary" id="vote-summary"></div>
+        </div>
+
+        <!-- Feature table -->
+        <div class="feature-table-wrap">
+          <h3 class="tab-heading">Input Features Summary</h3>
+          <table class="feature-table" id="feature-table">
+            <thead><tr><th>Feature</th><th>Value</th></tr></thead>
+            <tbody id="feature-table-body"></tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════ ABOUT XAI ══════════════════════════════════ -->
+<section id="section-about" class="section">
+  <div class="container about-container">
+    <h2 class="section-heading">What is Explainable AI?</h2>
+    <p class="about-intro">
+      Traditional AI models — especially ensemble methods like Random Forest — are often called
+      "black boxes." They produce predictions but cannot easily explain <em>why</em>.
+      Explainable AI (XAI) is the set of techniques that opens that black box.
+    </p>
+
+    <div class="xai-cards">
+      <div class="xai-card">
+        <div class="xai-icon">🔍</div>
+        <h3>LIME</h3>
+        <p>
+          <strong>Local Interpretable Model-agnostic Explanations</strong> explains individual
+          predictions by creating a local linear approximation. It perturbs the input slightly
+          and fits a simple model to understand which features matter most for <em>this specific</em> prediction.
+        </p>
+        <div class="xai-algo">
+          <code>g(z) ≈ f(x) near x</code>
+          <span>g = simple model, f = complex model</span>
+        </div>
+      </div>
+
+      <div class="xai-card">
+        <div class="xai-icon">📊</div>
+        <h3>SHAP</h3>
+        <p>
+          <strong>SHapley Additive exPlanations</strong> uses game theory (Shapley values)
+          to fairly distribute the "credit" for a prediction among features. It compares
+          predictions made with and without each feature to measure its marginal contribution.
+        </p>
+        <div class="xai-algo">
+          <code>φᵢ = Σ [f(S∪{i}) − f(S)]</code>
+          <span>Sum of marginal contributions over all feature subsets</span>
+        </div>
+      </div>
+
+      <div class="xai-card">
+        <div class="xai-icon">🌐</div>
+        <h3>Feature Importance</h3>
+        <p>
+          <strong>Global Importance</strong> (Mean Decrease Impurity) measures how much
+          each feature reduces uncertainty (Gini impurity) across all decision trees.
+          Higher importance = more influential feature globally.
+        </p>
+        <div class="xai-algo">
+          <code>Imp(f) = Σ nodes Δ impurity</code>
+          <span>Summed across all trees & all splits on feature f</span>
+        </div>
+      </div>
+
+      <div class="xai-card">
+        <div class="xai-icon">🌳</div>
+        <h3>Random Forest</h3>
+        <p>
+          An ensemble of 200 Decision Trees. Each tree is trained on a random
+          subset of data (bagging) and features (feature randomness). Final prediction
+          is by majority vote, making it robust and accurate.
+        </p>
+        <div class="xai-algo">
+          <code>ŷ = mode{ h₁(x), h₂(x), ..., h₂₀₀(x) }</code>
+          <span>Majority vote of 200 decision trees</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tech-stack">
+      <h3>Technology Stack</h3>
+      <div class="tech-pills">
+        <span class="pill">Python 3.11</span>
+        <span class="pill">Flask</span>
+        <span class="pill">scikit-learn</span>
+        <span class="pill">NumPy</span>
+        <span class="pill">Pandas</span>
+        <span class="pill">Chart.js</span>
+        <span class="pill">LIME (custom)</span>
+        <span class="pill">SHAP (approximated)</span>
+      </div>
+    </div>
+
+    <div class="why-legal">
+      <h3>Why Legal Domain?</h3>
+      <p>
+        Legal AI is one of the highest-stakes applications of machine learning. A wrong prediction
+        can affect a person's freedom. This makes <strong>explainability non-negotiable</strong> —
+        judges, lawyers, and defendants must understand <em>why</em> the model says what it says.
+        This project demonstrates how XAI techniques make AI trustworthy and auditable in
+        high-stakes domains.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="site-footer-bar">
+  <p>XAI Legal Predictor · AIML Engineering · 3rd Year Mini Project · Built with Python, Flask & scikit-learn</p>
+</footer>
+
+<script src="/static/js/main.js"></script>
+<script>
+  // Inject Jinja data into JS
+  const SAMPLE_CASES = {{ sample_cases | tojson }};
+  const FEATURE_DESCRIPTIONS = {{ feature_descriptions | tojson }};
+  // Load model accuracy on page load
+  fetch('/model_info').then(r => r.json()).then(d => {
+    document.getElementById('stat-acc').textContent = d.accuracy + '%';
+  });
+</script>
+</body>
+</html>
